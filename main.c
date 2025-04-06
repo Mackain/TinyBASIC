@@ -36,6 +36,14 @@ void sort_program() {
     }
 }
 
+// NEW FUNCTION: List all lines
+void list_program() {
+    sort_program();  // Make sure the program is sorted
+    for (int i = 0; i < program_size; i++) {
+        printf("%d %s\n", program[i].line_number, program[i].code);
+    }
+}
+
 void run_program() {
     int pc = 0; // program counter (index in the program array)
 
@@ -64,7 +72,7 @@ void run_program() {
 
 int main() {
     char input[MAX_LINE_LENGTH];
-    printf("Tiny BASIC Interpreter. Type RUN to execute.\n");
+    printf("Tiny BASIC Interpreter. Type RUN, LIST or EXIT.\n");
 
     while (1) {
         printf("> ");
@@ -77,6 +85,9 @@ int main() {
         if (strcmp(input, "RUN") == 0) {
             sort_program();
             run_program();
+            continue;
+        } else if (strcmp(input, "LIST") == 0) {
+            list_program();
             continue;
         } else if (strcmp(input, "EXIT") == 0) {
             break;
@@ -105,4 +116,3 @@ int main() {
 
     return 0;
 }
-
