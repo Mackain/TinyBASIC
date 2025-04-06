@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h> // for usleep
 
 #define MAX_LINES 1000
 #define MAX_LINE_LENGTH 100
@@ -12,6 +13,7 @@ typedef struct {
 
 BasicLine program[MAX_LINES];
 int program_size = 0;
+double clock_frequency = 0; // 0 = unlimited speed
 
 // Find a line by its line number
 int find_line(int line_number) {
@@ -36,16 +38,24 @@ void sort_program() {
     }
 }
 
-// NEW FUNCTION: List all lines
+// List all program lines
 void list_program() {
-    sort_program();  // Make sure the program is sorted
+    sort_program();
     for (int i = 0; i < program_size; i++) {
         printf("%d %s\n", program[i].line_number, program[i].code);
     }
 }
 
+// Sleep according to clock frequency
+void sleep_for_clock() {
+    if (clock_frequency > 0) {
+        int microseconds = (int)(1000000.0 / clock_frequency);
+        usleep(microseconds);
+    }
+}
+
 void run_program() {
-    int pc = 0; // program counter (index in the program array)
+    int pc = 0; // program counter
 
     while (pc < program_size) {
         char command[MAX_LINE_LENGTH];
@@ -67,10 +77,32 @@ void run_program() {
             printf("UNKNOWN COMMAND: %s\n", command);
             pc++;
         }
+
+        sleep_for_clock();
     }
 }
 
-int main() {
+// Parse command-line arguments
+void parse_args(int argc, char *argv[]) {
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-cf") == 0 && i + 1 < argc) {
+            clock_frequency = atof(argv[i + 1]);
+            if (clock_frequency <= 0) {
+                printf("Invalid clock frequency. Running at full speed.\n");
+                clock_frequency = 0;
+            } else {
+                printf("Clock frequency set to %.2f Hz\n", clock_frequency);
+            }
+            i++; // Skip next argument since it’s the value
+        } else {
+            printf("Unknown option: %s\n", argv[i]);
+        }
+    }
+}
+
+int main(int argc, char *argv[]) {
+    parse_args(argc, argv);
+
     char input[MAX_LINE_LENGTH];
     printf("Tiny BASIC Interpreter. Type RUN, LIST or EXIT.\n");
 
@@ -79,8 +111,7 @@ int main() {
         if (!fgets(input, sizeof(input), stdin))
             break;
 
-        // Remove newline
-        input[strcspn(input, "\n")] = 0;
+        input[strcspn(input, "\n")] = 0; // remove newline
 
         if (strcmp(input, "RUN") == 0) {
             sort_program();
@@ -101,9 +132,9 @@ int main() {
             continue;
         }
 
-        *rest = 0; // split input into two strings
+        *rest = 0; // split input
         line_number = atoi(input);
-        rest++; // move to actual code
+        rest++; // move to code
 
         if (program_size < MAX_LINES) {
             program[program_size].line_number = line_number;
