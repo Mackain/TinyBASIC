@@ -2,9 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h> // for usleep
+#include <ctype.h>  // for isalpha and isdigit
 
 #define MAX_LINES 1000
 #define MAX_LINE_LENGTH 100
+#define MAX_VARIABLES 26  // A-Z
 
 typedef struct {
     int line_number;
@@ -14,6 +16,7 @@ typedef struct {
 BasicLine program[MAX_LINES];
 int program_size = 0;
 double clock_frequency = 0; // 0 = unlimited speed
+int variables[MAX_VARIABLES] = {0}; // Variables A-Z
 
 // Find a line by its line number
 int find_line(int line_number) {
@@ -54,6 +57,17 @@ void sleep_for_clock() {
     }
 }
 
+// Evaluate a simple expression (only single variable or number)
+int eval_expr(const char *expr) {
+    while (isspace(*expr)) expr++; // skip spaces
+    if (isalpha(*expr)) {
+        char var = toupper(*expr);
+        return variables[var - 'A'];
+    } else {
+        return atoi(expr);
+    }
+}
+
 void run_program() {
     int pc = 0; // program counter
 
@@ -61,8 +75,25 @@ void run_program() {
         char command[MAX_LINE_LENGTH];
         strcpy(command, program[pc].code);
 
+        // Skip REM lines
+        if (strncmp(command, "REM ", 4) == 0 || strcmp(command, "REM") == 0) {
+            pc++;
+            sleep_for_clock();
+            continue;
+        }
+
         if (strncmp(command, "PRINT ", 6) == 0) {
-            printf("%s\n", command + 6);
+            const char *to_print = command + 6;
+            while (*to_print == ' ') to_print++;
+
+            if (isalpha(*to_print) && *(to_print + 1) == '\0') {
+                // Single variable
+                int value = variables[toupper(*to_print) - 'A'];
+                printf("%d\n", value);
+            } else {
+                // Regular text
+                printf("%s\n", to_print);
+            }
             pc++;
         } else if (strncmp(command, "GOTO ", 5) == 0) {
             int target_line = atoi(command + 5);
@@ -73,6 +104,62 @@ void run_program() {
                 printf("LINE %d NOT FOUND\n", target_line);
                 break;
             }
+        } else if (strncmp(command, "LET ", 4) == 0) {
+            char var;
+            int value;
+            if (sscanf(command + 4, " %c = %d", &var, &value) == 2) {
+                var = toupper(var);
+                if (var >= 'A' && var <= 'Z') {
+                    variables[var - 'A'] = value;
+                } else {
+                    printf("INVALID VARIABLE NAME: %c\n", var);
+                }
+            } else {
+                printf("SYNTAX ERROR IN LET STATEMENT\n");
+            }
+            pc++;
+        } else if (strncmp(command, "IF ", 3) == 0) {
+            int left, right;
+            char op[3], then_part[MAX_LINE_LENGTH];
+            const char *cond = command + 3;
+
+            if (sscanf(cond, "%d %2s %d THEN %[^\n]", &left, op, &right, then_part) == 4 ||
+                sscanf(cond, "%c %2s %d THEN %[^\n]", (char*)&left, op, &right, then_part) == 4) {
+
+                if (isalpha(left)) left = variables[toupper((char)left) - 'A'];
+
+                int condition_met = 0;
+                if (strcmp(op, "=") == 0) condition_met = (left == right);
+                else if (strcmp(op, ">") == 0) condition_met = (left > right);
+                else if (strcmp(op, "<") == 0) condition_met = (left < right);
+                else {
+                    printf("UNKNOWN OPERATOR: %s\n", op);
+                    pc++;
+                    continue;
+                }
+
+                if (condition_met) {
+                    if (strncmp(then_part, "PRINT ", 6) == 0) {
+                        printf("%s\n", then_part + 6);
+                    } else if (strncmp(then_part, "GOTO ", 5) == 0) {
+                        int target_line = atoi(then_part + 5);
+                        int target_index = find_line(target_line);
+                        if (target_index >= 0) {
+                            pc = target_index;
+                            sleep_for_clock();
+                            continue;
+                        } else {
+                            printf("LINE %d NOT FOUND\n", target_line);
+                            break;
+                        }
+                    } else {
+                        printf("UNKNOWN COMMAND AFTER THEN: %s\n", then_part);
+                    }
+                }
+            } else {
+                printf("SYNTAX ERROR IN IF STATEMENT\n");
+            }
+            pc++;
         } else {
             printf("UNKNOWN COMMAND: %s\n", command);
             pc++;
