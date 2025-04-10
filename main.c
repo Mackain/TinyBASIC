@@ -25,7 +25,7 @@ int find_line(int line_number) {
     return -1;
 }
 
-// Sort program lines by line_number
+// Sort program lines by line_number.
 void sort_program() {
     for (int i = 0; i < program_size - 1; i++) {
         for (int j = i + 1; j < program_size; j++) {
